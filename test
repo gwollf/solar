@@ -1,0 +1,345 @@
+#include <SPI.h>
+#include <Ethernet.h>
+#include <EthernetUdp.h>
+#include <ArduinoJson.h>
+#include <SPI.h>
+
+// Enter a MAC address for your controller below.
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED };
+
+// Set the static IP address to use if the DHCP fails to assign
+IPAddress ip(192, 168, 0, 177);
+
+// Define the local port number
+unsigned int localPort = 50222;
+
+// Initialize the Ethernet client library
+EthernetClient client;
+// Create a UDP object
+EthernetUDP Udp;
+
+// Open-Meteo API URL
+char server[] = "api.open-meteo.com";
+
+// Your latitude and longitude
+float latitude = 45.189034;
+float longitude = -91.642687;
+
+unsigned long previousMillis = 0;
+const long interval = 60000;  // interval at which to run metro weather (60 seconds)
+
+void setup() {
+  // Initialize serial communication
+  Serial.begin(9600);
+  // Wait for serial port to connect
+  while (!Serial) {
+    ;  // Needed for native USB port only
+  }
+
+  // Start the Ethernet connection:
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
+    // Try to congifure using IP address instead of DHCP
+    Ethernet.begin(mac, ip);
+  }
+  // Print the IP address and port number
+  Serial.print("IP Address: ");
+  Serial.println(Ethernet.localIP());
+  Serial.print("Local Port: ");
+  Serial.println(localPort);
+
+  // Start listening for incoming UDP packets
+  Udp.begin(localPort);
+
+  // Give the Ethernet shield a second to initialize:
+  delay(1000);
+
+
+  void WeatherStation() {
+    // Check if there is any incoming data on the UDP port
+    int packetSize = Udp.parsePacket();
+
+    // If there is, read and print the data
+    if (packetSize) {
+      // Read the data
+      char buffer[255];
+      int len = Udp.read(buffer, sizeof(buffer));
+      if (len > 0) {
+        buffer[len] = '\0';
+      }
+
+      // Print the sender's IP address and port number
+      Serial.print("Received packet from ");
+      Serial.print(Udp.remoteIP());
+      Serial.print(":");
+      Serial.println(Udp.remotePort());
+
+      // Print the received data as characters
+      //Serial.println("Received data:");
+      //Serial.println(buffer);
+
+      // Deserialize the JSON data
+      StaticJsonDocument<512> doc;
+      DeserializationError error = deserializeJson(doc, buffer);
+
+      // Check for deserialization errors
+      if (error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        return;
+      }
+
+      // Check if the message is of type "rapid_wind"
+      if (strcmp(doc["type"], "rapid_wind") == 0) {
+        // Extract values from the JSON data
+        JsonArray ob = doc["ob"];
+        long timestamp = ob[0];
+        float windSpeed = ob[1];
+        int windDirection = ob[2];
+
+        // Print the extracted values
+        Serial.println("rapid_wind:");
+
+        Serial.println("timestamp: " + String(timestamp));
+        Serial.println("wind_speed: " + String(windSpeed));
+        Serial.println("wind_direction: " + String(windDirection));
+        Serial.println();
+
+        // TODO: Process the extracted values as needed
+      }
+
+      // Check if the message is of type "device_status"
+      if (strcmp(doc["type"], "device_status") == 0) {
+        // Extract values from the JSON data
+        float voltage = doc["voltage"];
+        int firmwareRevision = doc["firmware_revision"];
+        int rssi = doc["rssi"];
+        int hubRssi = doc["hub_rssi"];
+        long sensorStatus = doc["sensor_status"];
+        int debug = doc["debug"];
+
+        // Print the extracted values
+        Serial.println("device_status");
+        Serial.println("voltage: " + String(voltage));
+        Serial.println("rssi: " + String(rssi));
+        Serial.println("hub_rssi: " + String(hubRssi));
+        Serial.println("sensor_status: " + String(sensorStatus));
+        Serial.println("debug: " + String(debug));
+        Serial.println();
+
+        // #<EUGPSCoordinates>TODO: Process the extracted values as needed
+      }
+
+      // Check if the message is of type "obs_st"
+      if (strcmp(doc["type"], "obs_st") == 0) {
+        // Extract values from the JSON data
+        JsonArray obsArray = doc["obs"];
+
+        for (JsonVariant obs : obsArray) {
+          long timestamp = obs[0];
+          float windLull = obs[1];
+          float windAvg = obs[2];
+          float windGust = obs[3];
+          int windDirection = obs[4];
+          int windSampleInterval = obs[5];
+          float stationPressure = obs[6];
+          float airTemperature = obs[7];
+          float relativeHumidity = obs[8];
+          int illuminance = obs[9];
+          float uvIndex = obs[10];
+          int solarRadiation = obs[11];
+          float rainAccumulationOverPreviousMinuteMm = obs[12];
+          int precipitationType = obs[13];
+          int lightningStrikeAverageDistanceKm = obs[14];
+          int lightningStrikeCount = obs[15];
+          float batteryVolts = obs[16];
+          int reportingIntervalMinutes = obs[17];
+
+          // Print the extracted values
+          Serial.println("obs_st");
+          Serial.println("timestamp: " + String(timestamp));
+          Serial.println("wind_lull: " + String(windLull));
+          Serial.println("wind_avg: " + String(windAvg));
+          Serial.println("wind_gust: " + String(windGust));
+          Serial.println("wind_direction: " + String(windDirection));
+          Serial.println("wind_sample_interval: " + String(windSampleInterval));
+          Serial.println("station_pressure: " + String(stationPressure));
+          Serial.println("air_temperature: " + String(airTemperature));
+          Serial.println("relative_humidity: " + String(relativeHumidity));
+          Serial.println("illuminance: " + String(illuminance));
+          Serial.println("uv_index: " + String(uvIndex));
+          Serial.println("solar_radiation: " + String(solarRadiation));
+          Serial.println("rain_accumulation_over_previous_minute_mm: " + String(rainAccumulationOverPreviousMinuteMm));
+          Serial.println("precipitation_type: " + String(precipitationType));
+          Serial.println("lightning_strike_average_distance_km: " + String(lightningStrikeAverageDistanceKm));
+          Serial.println("lightning_strike_count: " + String(lightningStrikeCount));
+          Serial.println("battery_volts: " + String(batteryVolts));
+          Serial.println("reporting_interval_minutes: " + String(reportingIntervalMinutes));
+        }
+      }
+    }
+  }
+
+  void OpenMetro() {
+    ///////////
+    // Connect to the Open-Meteo server
+    if (client.connect(server, 80)) {
+      Serial.println("Connected to Open-Meteo server");
+
+      // Send the HTTP request with HTTP version 1.0
+      client.print("GET /v1/forecast?latitude=");
+      client.print(latitude);
+      client.print("&longitude=");
+      client.print(longitude);
+      client.println("&current_weather=true HTTP/1.0");  // Use HTTP/1.0 instead of HTTP/1.1
+      client.println("Host: api.open-meteo.com");
+      client.println("Connection: close");
+      client.println();
+
+      // Wait for a response from the server
+      while (client.connected()) {
+        if (client.available()) {
+          // Create a buffer to store the response
+          StaticJsonDocument<1024> doc;
+
+          // Skip the HTTP headers by reading until an empty line
+          boolean currentLineIsBlank = true;
+          while (client.available()) {
+            char c = client.read();
+            if (c == '\n' && currentLineIsBlank) {
+              break;  // End of headers
+            }
+            if (c == '\n') {
+              currentLineIsBlank = true;
+            } else if (c != '\r') {
+              currentLineIsBlank = false;
+            }
+          }
+
+          // Parse the JSON data from the response
+          DeserializationError error = deserializeJson(doc, client);
+
+          // Check for parsing errors
+          if (error) {
+            Serial.print("deserializeJson() failed: ");
+            Serial.println(error.c_str());
+            return;
+          }
+
+          // Extract the weather code from the JSON object
+          int weathercode = doc["current_weather"]["weathercode"];
+
+          String description;
+          switch (weathercode) {
+            case 0:
+              description = "Clear sky";
+              break;
+            case 1:
+              description = "Mainly clear";
+              break;
+            case 2:
+              description = "Partly cloudy";
+              break;
+            case 3:
+              description = "Overcast";
+              break;
+            case 45:
+              description = "Fog";
+              break;
+            case 48:
+              description = "Depositing rime fog";
+              break;
+            case 51:
+              description = "Drizzle: Light intensity";
+              break;
+            case 53:
+              description = "Drizzle: Moderate intensity";
+              break;
+            case 55:
+              description = "Drizzle: Dense intensity";
+              break;
+            case 56:
+              description = "Freezing Drizzle: Light intensity";
+              break;
+            case 57:
+              description = "Freezing Drizzle: Dense intensity";
+              break;
+            case 61:
+              description = "Rain: Slight intensity";
+              break;
+            case 63:
+              description = "Rain: Moderate intensity";
+              break;
+            case 65:
+              description = "Rain: Heavy intensity";
+              break;
+            case 66:
+              description = "Freezing Rain: Light intensity";
+              break;
+            case 67:
+              description = "Freezing Rain: Heavy intensity";
+              break;
+            case 71:
+              description = "Snow fall: Slight intensity";
+              break;
+            case 73:
+              description = "Snow fall: Moderate intensity";
+              break;
+            case 75:
+              description = "Snow fall: Heavy intensity";
+              break;
+            case 77:
+              description = "Snow grains";
+              break;
+            case 80:
+              description = "Rain showers: Slight";
+              break;
+            case 81:
+              description = "Rain showers: Moderate";
+              break;
+            case 82:
+              description = "Rain showers: Violent";
+              break;
+            case 85:
+              description = "Snow showers: Slight";
+              break;
+            case 86:
+              description = "Snow showers: Heavy";
+              break;
+            case 95:
+              description = "Thunderstorm: Slight or moderate";
+              break;
+            case 96:
+              description = "Thunderstorm with slight hail";
+              break;
+            case 99:
+              description = "Thunderstorm with heavy hail";
+              break;
+          }
+
+          // Print the extracted data
+          Serial.print("Weather code: ");
+          Serial.println(weathercode);
+          Serial.print("Description: ");
+          Serial.println(description);
+        }
+      }
+
+      // Disconnect from the server
+      client.stop();
+      Serial.println("\nDisconnected from Open-Meteo server");
+    } else {
+      Serial.println("Failed to connect to Open-Meteo server");
+    }
+  }
+
+
+
+  void loop() {
+    WeatherStation();
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= interval) {
+      // save the last time section two was run
+      previousMillis = currentMillis;
+      OpenMetro();
+    }
